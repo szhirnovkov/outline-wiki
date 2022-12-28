@@ -1,0 +1,18 @@
+version: '3'
+services:
+  nginx-proxy:
+    container_name: nginx-proxy
+    image: 'nginx:1.23'
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./container-data/data:/etc/nginx/conf.d
+      - ./container-data/letsencrypt:/etc/letsencrypt
+    networks:
+     - proxy-net
+
+networks:
+  proxy-net:
+    external: true

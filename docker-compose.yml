@@ -1,0 +1,79 @@
+version: "2"
+services:
+  outline_redis:
+    image: redis:7.0.5
+    restart: always
+    container_name: outline_redis
+    networks:
+      - outline-internal
+
+  minio:
+    image: minio/minio
+    restart: always
+    container_name: minio
+    volumes:
+      - ./outline/container-data/data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}
+    networks:
+      - proxy-net
+    command: "server /data --console-address :9001"
+  
+  outline_postgres:
+    image: postgres:14
+    restart: always
+    container_name: outline_postgres
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=outline
+      - POSTGRES_DB=outline
+    networks:
+      - outline-internal
+    volumes:
+      - ./outline/container-data/db:/var/lib/postgresql/data
+
+  outline:
+    image: outlinewiki/outline:0.66.3
+    user: root
+    restart: always
+    container_name: outline
+    command: sh -c "yarn sequelize:migrate --env=production-ssl-disabled && yarn start --env=production-ssl-disabled"
+    depends_on:
+      - outline_postgres
+      - outline_redis
+      - outline_minio
+    environment:
+      - NODE_ENV=production
+      - PGSSLMODE=disable
+      - SECRET_KEY=${SECRET_KEY}
+      - UTILS_SECRET=${UTILS_SECRET}
+      - DATABASE_URL=postgres://outline:${POSTGRES_PASSWORD}@outline_postgres:5432/outline
+      - REDIS_URL=redis://outline_redis:6379
+      - URL=${URL}
+      - HOST=${HOST}
+      - PORT=${PORT}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_S3_UPLOAD_BUCKET_URL=${AWS_S3_UPLOAD_BUCKET_URL}
+      - AWS_S3_UPLOAD_BUCKET_NAME=${AWS_S3_UPLOAD_BUCKET_NAME}
+      - AWS_S3_FORCE_PATH_STYLE=${AWS_S3_FORCE_PATH_STYLE}
+      - AWS_S3_ACL=${AWS_S3_ACL}
+      - OIDC_CLIENT_ID=wiki
+      - OIDC_CLIENT_SECRET=${AUTH_CLIENT_SECRET}
+      - OIDC_AUTH_URI=${AUTH_URL}/auth/realms/master/protocol/openid-connect/auth
+      - OIDC_TOKEN_URI=${AUTH_URL}/auth/realms/master/protocol/openid-connect/token
+      - OIDC_USERINFO_URI=${AUTH_URL}/auth/realms/master/protocol/openid-connect/userinfo
+      - OIDC_USERNAME_CLAIM=preferred_username
+      - OIDC_DISPLAY_NAME=Keycloak
+      - OIDC_SCOPES=openid profile email
+    networks:
+      - proxy-net
+      - outline-internal
+
+networks:
+  outline-internal:
+  proxy-net:
+    external: true
